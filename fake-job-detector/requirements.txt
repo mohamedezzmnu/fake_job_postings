@@ -1,0 +1,14 @@
+# Pin these to the SAME versions you trained with in Colab, otherwise joblib
+# will refuse to load the .pkl files (or load them wrong). The export cell
+# prints the exact versions - copy them here before deploying.
+fastapi==0.115.6
+pydantic==2.10.4
+scikit-learn==1.6.1
+scipy==1.15.1
+numpy==2.2.1
+joblib==1.4.2
+
+# XGBoost is intentionally left out: the wheel is ~300MB unpacked and blows
+# past Vercel's 250MB function limit when combined with scipy + scikit-learn.
+# Only uncomment if you switch to a trimmed build and are ready to debug size.
+# xgboost==2.1.3

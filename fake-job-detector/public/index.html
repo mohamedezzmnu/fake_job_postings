@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>كاشف إعلانات الوظائف المزيفة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#131d2b;
+    --ink-soft:#4a5a6d;
+    --paper:#e8ecef;
+    --surface:#ffffff;
+    --line:#c8d1d9;
+    --steel:#2f5d8a;
+    --green:#1a6b52;
+    --amber:#b5820f;
+    --red:#9e2b2b;
+    --radius:3px;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
+    font-weight:400;
+    line-height:1.65;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:0 20px 80px}
+
+  header{padding:64px 0 36px;border-bottom:2px solid var(--ink)}
+  h1{
+    font-size:clamp(30px,6vw,52px);
+    font-weight:700;
+    letter-spacing:-0.02em;
+    line-height:1.15;
+    margin:0 0 14px;
+    max-width:14ch;
+  }
+  header p{margin:0;color:var(--ink-soft);max-width:56ch;font-size:16px}
+
+  /* ---- result meter: the one loud element ---- */
+  .result{
+    margin:28px 0 0;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:26px;
+    display:none;
+  }
+  .result.show{display:block}
+  .result[data-verdict="real"]{border-top:6px solid var(--green)}
+  .result[data-verdict="suspicious"]{border-top:6px solid var(--amber)}
+  .result[data-verdict="fraudulent"]{border-top:6px solid var(--red)}
+  .verdict{font-size:26px;font-weight:700;margin:0 0 4px}
+  .verdict-sub{margin:0 0 20px;color:var(--ink-soft);font-size:15px}
+  .meter{position:relative;height:14px;background:var(--paper);border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .meter i{
+    position:absolute;inset-block:0;inset-inline-start:0;
+    display:block;width:0;background:var(--steel);
+    transition:width .5s cubic-bezier(.2,.7,.3,1);
+  }
+  [data-verdict="real"] .meter i{background:var(--green)}
+  [data-verdict="suspicious"] .meter i{background:var(--amber)}
+  [data-verdict="fraudulent"] .meter i{background:var(--red)}
+  .scale{display:flex;justify-content:space-between;margin-top:8px;font-size:12.5px;color:var(--ink-soft)}
+  .notes{margin:22px 0 0;padding:0;list-style:none;border-top:1px solid var(--line)}
+  .notes li{padding:10px 0 10px 0;border-bottom:1px solid var(--line);font-size:15px}
+  .notes li::before{content:"—";color:var(--steel);margin-inline-end:10px}
+  .notes-title{font-size:14px;color:var(--ink-soft);margin:20px 0 0}
+
+  /* ---- form ---- */
+  form{margin-top:40px}
+  fieldset{border:0;padding:0;margin:0 0 34px}
+  legend{
+    font-size:15px;font-weight:600;padding:0;margin-bottom:14px;
+    border-bottom:1px solid var(--line);width:100%;padding-bottom:8px;
+  }
+  label{display:block;margin-bottom:16px;font-size:14.5px;font-weight:500}
+  label span{display:block;margin-bottom:6px}
+  .hint{font-weight:400;color:var(--ink-soft);font-size:13px}
+  input[type=text],select,textarea{
+    width:100%;font:inherit;font-size:15px;font-weight:400;
+    padding:10px 12px;background:var(--surface);
+    border:1px solid var(--line);border-radius:var(--radius);color:var(--ink);
+  }
+  textarea{resize:vertical;min-height:96px;line-height:1.6}
+  input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{
+    outline:2px solid var(--steel);outline-offset:2px;
+  }
+  .grid{display:grid;gap:0 18px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+  .checks{display:flex;flex-wrap:wrap;gap:18px}
+  .check{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:500;margin:0}
+  .check input{width:17px;height:17px;accent-color:var(--steel)}
+
+  .actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  button{
+    font:inherit;font-weight:600;font-size:16px;
+    background:var(--ink);color:#fff;border:0;
+    padding:13px 30px;border-radius:var(--radius);cursor:pointer;
+  }
+  button:hover{background:var(--steel)}
+  button:disabled{background:var(--ink-soft);cursor:progress}
+  .ghost{background:none;color:var(--steel);padding:13px 4px;font-weight:500}
+  .ghost:hover{background:none;text-decoration:underline}
+  .error{color:var(--red);font-size:14.5px;margin:0}
+
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);color:var(--ink-soft);font-size:13.5px}
+  footer p{margin:0 0 6px;max-width:64ch}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>الإعلان ده حقيقي ولا نصب؟</h1>
+    <p>الصق تفاصيل إعلان الوظيفة وهيتقارن بنموذج اتدرّب على 18 ألف إعلان حقيقي ومزيف. كل ما تملا خانات أكتر، كل ما النتيجة تبقى أدق.</p>
+  </header>
+
+  <section class="result" id="result" aria-live="polite">
+    <p class="verdict" id="verdict"></p>
+    <p class="verdict-sub" id="verdictSub"></p>
+    <div class="meter"><i id="bar"></i></div>
+    <div class="scale"><span>على الأغلب حقيقي</span><span>على الأغلب مزيف</span></div>
+    <p class="notes-title" id="notesTitle" hidden>حاجات ملفتة في الإعلان</p>
+    <ul class="notes" id="notes"></ul>
+  </section>
+
+  <form id="form">
+    <fieldset>
+      <legend>نص الإعلان <span class="hint">(اكتبه بالإنجليزي — النموذج اتدرب على إعلانات إنجليزية)</span></legend>
+      <label><span>عنوان الوظيفة</span>
+        <input type="text" name="title" placeholder="Data Entry Specialist"></label>
+      <label><span>نبذة عن الشركة <span class="hint">سيبها فاضية لو الإعلان أصلًا مافيهوش نبذة</span></span>
+        <textarea name="company_profile"></textarea></label>
+      <label><span>وصف الوظيفة</span>
+        <textarea name="description"></textarea></label>
+      <label><span>المتطلبات</span>
+        <textarea name="requirements"></textarea></label>
+      <label><span>المزايا</span>
+        <textarea name="benefits"></textarea></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>تفاصيل الوظيفة</legend>
+      <div class="grid">
+        <label><span>المكان <span class="hint">كود الدولة الأول، زي US, GB, EG</span></span>
+          <input type="text" name="location" placeholder="US, NY, New York"></label>
+        <label><span>المرتب <span class="hint">سيبه فاضي لو مش مكتوب</span></span>
+          <input type="text" name="salary_range" placeholder="50000-60000"></label>
+        <label><span>نوع التعاقد</span>
+          <select name="employment_type">
+            <option value="">مش مذكور</option>
+            <option>Full-time</option><option>Part-time</option>
+            <option>Contract</option><option>Temporary</option><option>Other</option>
+          </select></label>
+        <label><span>الخبرة المطلوبة</span>
+          <select name="required_experience">
+            <option value="">مش مذكورة</option>
+            <option>Internship</option><option>Entry level</option>
+            <option>Associate</option><option>Mid-Senior level</option>
+            <option>Director</option><option>Executive</option><option>Not Applicable</option>
+          </select></label>
+        <label><span>المؤهل المطلوب</span>
+          <select name="required_education">
+            <option value="">مش مذكور</option>
+            <option>High School or equivalent</option>
+            <option>Associate Degree</option><option>Bachelor's Degree</option>
+            <option>Master's Degree</option><option>Doctorate</option>
+            <option>Professional</option><option>Certification</option>
+            <option>Some College Coursework Completed</option>
+            <option>Vocational</option><option>Unspecified</option>
+          </select></label>
+      </div>
+      <div class="checks">
+        <label class="check"><input type="checkbox" name="has_company_logo"> فيه لوجو للشركة</label>
+        <label class="check"><input type="checkbox" name="telecommuting"> شغل عن بُعد</label>
+        <label class="check"><input type="checkbox" name="has_questions"> فيه أسئلة للمتقدمين</label>
+      </div>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit" id="submit">افحص الإعلان</button>
+      <button type="button" class="ghost" id="example">جرّب مثال</button>
+      <p class="error" id="error" hidden></p>
+    </div>
+  </form>
+
+  <footer>
+    <p>النتيجة تقدير احتمالي مش حكم نهائي. النموذج بيشوف الأنماط اللي اتعلمها من بيانات قديمة، وممكن يغلط في الاتجاهين — خصوصًا مع إعلانات مكتوبة كويس أو مجالات مش موجودة في بيانات التدريب.</p>
+    <p>لو الإعلان طلب منك فلوس أو بيانات بنكية قبل ما تشتغل، ده نصب مهما قال الموديل.</p>
+  </footer>
+
+</div>
+
+<script>
+const form = document.getElementById('form');
+const resultBox = document.getElementById('result');
+const bar = document.getElementById('bar');
+const submitBtn = document.getElementById('submit');
+const errorEl = document.getElementById('error');
+
+const COPY = {
+  real:       ['مفيش مؤشرات نصب واضحة', 'الإعلان شبه الإعلانات الحقيقية في بيانات التدريب.'],
+  suspicious: ['خد بالك', 'فيه علامات بتظهر كتير في الإعلانات المزيفة. اتأكد من الشركة بنفسك.'],
+  fraudulent: ['على الأغلب مزيف', 'الإعلان قريب جدًا من أنماط النصب اللي النموذج اتدرب عليها.']
+};
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorEl.hidden = true;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'بيفحص…';
+
+  const fd = new FormData(form);
+  const payload = {};
+  for (const [k, v] of fd.entries()) payload[k] = v;
+  for (const k of ['has_company_logo', 'telecommuting', 'has_questions']) {
+    payload[k] = form.elements[k].checked ? 1 : 0;
+  }
+
+  try {
+    const res = await fetch('/api/predict', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'الفحص ما تمّش. جرب تاني.');
+    render(data);
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.hidden = false;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'افحص الإعلان';
+  }
+});
+
+function render(data) {
+  const [head, sub] = COPY[data.verdict];
+  resultBox.dataset.verdict = data.verdict;
+  document.getElementById('verdict').textContent = head;
+  document.getElementById('verdictSub').textContent =
+    sub + ' احتمال إنه مزيف: ' + Math.round(data.probability * 100) + '%.';
+
+  const notes = document.getElementById('notes');
+  notes.innerHTML = '';
+  document.getElementById('notesTitle').hidden = data.notes.length === 0;
+  data.notes.forEach(n => {
+    const li = document.createElement('li');
+    li.textContent = n;
+    notes.appendChild(li);
+  });
+
+  resultBox.classList.add('show');
+  bar.style.width = '0%';
+  requestAnimationFrame(() => { bar.style.width = (data.probability * 100) + '%'; });
+  resultBox.scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
+document.getElementById('example').addEventListener('click', () => {
+  form.reset();
+  form.elements.title.value = 'Home Based Data Entry Clerk - Immediate Start';
+  form.elements.description.value =
+    'We are urgently hiring data entry clerks to work from home. No experience needed. ' +
+    'Earn $3000 weekly processing simple forms. Applicants must be able to start immediately. ' +
+    'Send your full name, address and bank details to confirm your position today.';
+  form.elements.location.value = 'US';
+  form.elements.employment_type.value = 'Full-time';
+  form.elements.telecommuting.checked = true;
+  form.elements.title.focus();
+});
+</script>
+</body>
+</html>
